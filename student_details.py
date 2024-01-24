@@ -36,6 +36,50 @@ def get_termins(session, predmet_id):
     return terminy_ids
 
 
+def get_zadani_points(session, predmet_id, zadani_id, el_index_id):
+    query = f'https://api.vut.cz/api/fit/aktualni_predmet/{predmet_id}/zadani/{zadani_id}/el_index/{el_index_id}/v4'
+    r = session.get(query)
+
+    try:
+        student_data = r.json()['data']['studenti'][0]
+        body = student_data['pocet_bodu']
+    except KeyError:
+        body = None
+
+    return body
+
+
+def get_zadanis(session, predmet_id):
+    query = f'https://api.vut.cz/api/fit/aktualni_predmet/{predmet_id}/zadani/v3'
+    r = session.get(query)
+
+    # this is -- probably -- the general class, i.e. not tied to a year
+    predmety = r.json()['data']['predmety']
+    if len(predmety) != 1:
+        raise ValueError(f'Unexpectedly, got {len(predmety)} classes in the response, expected one')
+
+    predmet = predmety[0]
+
+    # yes, the API response is structured like this
+    predmety = predmet['aktualni_predmety']
+    if len(predmety) != 1:
+        raise ValueError(f'Unexpectedly, got {len(predmety)} classes in the response, expected one')
+
+    predmet = predmety[0]
+    if predmet['aktualni_predmet_id'] != predmet_id:
+        raise ValueError(f'Unexpectedly, class {predmet["aktualni_predmet_id"]} was returned')
+
+    zadanis = predmet['zkousky']
+
+    zadani_ids = []
+    for zadani in zadanis:
+        for instance in zadani['zadani']:
+            zadani_ids.append(instance['zadani_id'])
+            print(zadani['zkouska_projekt_nazev'], instance['zadani_nazev'])
+
+    return zadani_ids
+
+
 def get_students(session, predmet_id):
     studeni_query = f'https://api.vut.cz/api/fit/aktualni_predmet/{predmet_id}/studenti/zapsani/v3'
     r = session.get(studeni_query)
@@ -67,13 +111,17 @@ def main():
     studenti = get_students(session, args.predmet_id)
     terminy_ids = get_termins(session, args.predmet_id)
 
+    zadani_ids = get_zadanis(session, args.predmet_id)
+
     for student in studenti:
         el_index_id = student['el_index_id']
 
         login, body_celkem = get_student_details(session, args.predmet_id, el_index_id)
-        points_all = [get_termin_points(session, args.predmet_id, termin_id, el_index_id) for termin_id in terminy_ids]
+        points_termins = [get_termin_points(session, args.predmet_id, termin_id, el_index_id) for termin_id in terminy_ids]
 
-        print(login, body_celkem, points_all)
+        points_zadanis = [get_zadani_points(session, args.predmet_id, zadani_id, el_index_id) for zadani_id in zadani_ids]
+
+        print(login, body_celkem, points_termins, points_zadanis)
 
 
 if __name__ == '__main__':
