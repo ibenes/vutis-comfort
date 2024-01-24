@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import argparse
+import datetime
 import os.path
 import logging
 
@@ -9,16 +10,44 @@ from cookie_magic import get_session
 import class_session
 
 
+def get_aktualni_predmet_id(session, abbreviation, academic_year):
+    if academic_year is None:
+        today = datetime.date.today()
+        if today.month in [1, 2, 3, 4, 5, 6, 7, 8]:
+            academic_year = today.year - 1
+        else:
+            academic_year = today.year
+        logging.info(f'Academic year has not been provided, estimating {academic_year} based on current date {today}')
+
+    q = f'https://api.vut.cz/api/fit/predmety/v3?zkratka={abbreviation}'
+    r = session.get(q)
+    predmety = r.json()['data']['predmety']
+    assert len(predmety) == 1
+
+    desired_aktualni_predmet_id = None
+    for aktualni_predmet in predmety[0]['aktualni_predmety']:
+        year = aktualni_predmet['rok']
+        aktualni_predmet_id = aktualni_predmet['aktualni_predmet_id']
+
+        if year == academic_year:
+            desired_aktualni_predmet_id = aktualni_predmet_id
+            break
+
+    return desired_aktualni_predmet_id
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--cookie', default=f'{os.path.expanduser("~")}/.vut_cookie')
-    parser.add_argument('--predmet-id', type=int, required=True)
+    parser.add_argument('-p', '--predmet-zkratka', required=True)
+    parser.add_argument('-y', '--predmet-year', type=int)
     args = parser.parse_args()
 
     logging.basicConfig(level='INFO')
 
     session = get_session(args.cookie)
-    predmet_session = class_session.ClassSession(session, args.predmet_id)
+    aktualni_predmet_id = get_aktualni_predmet_id(session, args.predmet_zkratka, args.predmet_year)
+    predmet_session = class_session.ClassSession(session, aktualni_predmet_id)
 
     studenti = predmet_session.get_students()
     terminy_ids = predmet_session.get_termins()
