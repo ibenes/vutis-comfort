@@ -3,6 +3,7 @@
 import argparse
 import os.path
 import logging
+import string
 import sys
 
 from cookie_magic import get_session
@@ -18,6 +19,9 @@ def format_line(items):
     return '\t'.join(items) + '\n'
 
 
+COLUMN_NAMES = string.ascii_uppercase
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--cookie', default=f'{os.path.expanduser("~")}/.vut_cookie')
@@ -25,7 +29,6 @@ def main():
     parser.add_argument('-y', '--predmet-year', type=int)
     parser.add_argument('-t', '--termin-id', type=int, required=True)
     parser.add_argument('-q', '--nb-questions', type=int, required=True)
-    parser.add_argument('--no-assignment-variant', action='store_true')
     args = parser.parse_args()
 
     logging.basicConfig(level='INFO')
@@ -39,16 +42,20 @@ def main():
     students_all = index_collection(predmet_session.get_students(), 'student_id')
     students_termin = predmet_session.get_termin_students(args.termin_id)
 
-    header = ['login', *[str(i+1) for i in range(args.nb_questions)], 'login', 'name']
-    if not args.no_assignment_variant:
-        header.insert(1, 'variant')
+    header = ['login', 'variant', *[str(i+1) for i in range(args.nb_questions)], 'login', 'name', 'sum', 'norm']
     sys.stdout.write(format_line(header))
-    for s_id in students_termin:
+
+    first_pts_column = COLUMN_NAMES[2]
+    last_pts_column = COLUMN_NAMES[2 + args.nb_questions - 1]
+    sum_formula_template = f'=if({first_pts_column}{{row_no}}="", "", sum({first_pts_column}{{row_no}}:{last_pts_column}{{row_no}}))'
+
+    sum_column = COLUMN_NAMES[2 + args.nb_questions + 2]
+    norm_formula_template = f'=if({sum_column}{{row_no}}="", "", {sum_column}{{row_no}} / (14 * 4) * 60)'
+
+    for row_no, s_id in enumerate(students_termin, start=2):
         s_info = students_all[s_id]
 
-        line = [s_info['login'], *['' for _ in range(args.nb_questions)], s_info['login'], s_info['label_pr']]
-        if not args.no_assignment_variant:
-            line.insert(1, '')
+        line = [s_info['login'], '', *['' for _ in range(args.nb_questions)], s_info['login'], s_info['label_pr'], sum_formula_template.format(row_no=row_no), norm_formula_template.format(row_no=row_no)]
 
         sys.stdout.write(format_line(line))
 
