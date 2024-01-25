@@ -2,11 +2,18 @@ import requests
 import getpass
 import logging
 import pickle
+import sys
 
 
 def create_authenticated_session():
-    user = input("Zadejte uzivatele IS VUT: ")
-    passwd = getpass.getpass("Zadejte heslo do IS VUT: ")
+    orig_stdout = sys.stdout
+    sys.stdout = sys.stderr
+
+    try:
+        user = input("Zadejte uzivatele IS VUT: ")
+        passwd = getpass.getpass("Zadejte heslo do IS VUT: ")
+    finally:
+        sys.stdout = orig_stdout
 
     session = requests.Session()
     session.auth = (user, passwd)
