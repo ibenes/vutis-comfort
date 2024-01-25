@@ -43,6 +43,7 @@ def main():
     students_termin = predmet_session.get_termin_students(args.termin_id)
 
     header = ['login', 'variant', *[str(i+1) for i in range(args.nb_questions)], 'login', 'name', 'sum', 'norm']
+    nb_columns = len(header)
     sys.stdout.write(format_line(header))
 
     first_data_column = 2
@@ -58,6 +59,7 @@ def main():
         s_info = students_all[s_id]
 
         line = [s_info['login'], '', *['' for _ in range(args.nb_questions)], s_info['login'], s_info['label_pr'], sum_formula_template.format(row_no=row_no), norm_formula_template.format(row_no=row_no)]
+        assert len(line) == nb_columns, f'Line with login {s_info["login"]} has {len(line)} items, expected {nb_columns}'
 
         sys.stdout.write(format_line(line))
 
@@ -72,7 +74,8 @@ def main():
     ]
 
     def produce_column_agregation_lines(name, formula):
-        return [*['' for _ in range(first_data_column)], *[formula.format(col_letter=COLUMN_NAMES[first_data_column+i]) for i in range(args.nb_questions)], '', '', '', '']
+        columns_with_agg = list(range(first_data_column, last_data_column+1)) + [last_data_column+2, last_data_column+3]
+        return [formula.format(col_letter=COLUMN_NAMES[i]) if i in columns_with_agg else '' for i in range(nb_columns)]
 
     for name, formula in aggregation_formulas:
         agg_line = produce_column_agregation_lines(name, formula)
