@@ -45,9 +45,11 @@ def main():
     header = ['login', 'variant', *[str(i+1) for i in range(args.nb_questions)], 'login', 'name', 'sum', 'norm']
     sys.stdout.write(format_line(header))
 
-    first_pts_column = COLUMN_NAMES[2]
-    last_pts_column = COLUMN_NAMES[2 + args.nb_questions - 1]
-    sum_formula_template = f'=if({first_pts_column}{{row_no}}="", "", sum({first_pts_column}{{row_no}}:{last_pts_column}{{row_no}}))'
+    first_data_column = 2
+    last_data_column = 2 + args.nb_questions - 1
+    first_letter = COLUMN_NAMES[first_data_column]
+    last_letter = COLUMN_NAMES[last_data_column]
+    sum_formula_template = f'=if({first_letter}{{row_no}}="", "", sum({first_letter}{{row_no}}:{last_letter}{{row_no}}))'
 
     sum_column = COLUMN_NAMES[2 + args.nb_questions + 2]
     norm_formula_template = f'=if({sum_column}{{row_no}}="", "", {sum_column}{{row_no}} / (14 * 4) * 60)'
@@ -58,6 +60,23 @@ def main():
         line = [s_info['login'], '', *['' for _ in range(args.nb_questions)], s_info['login'], s_info['label_pr'], sum_formula_template.format(row_no=row_no), norm_formula_template.format(row_no=row_no)]
 
         sys.stdout.write(format_line(line))
+
+    first_data_row = 2
+    last_data_row = 2 + len(students_termin) - 1
+
+    single_question_range = f'{{col_letter}}{first_data_row}:{{col_letter}}{last_data_row}'
+    aggregation_formulas = [
+        ('max', f'=max({single_question_range})'),
+        ('avg', f'=average({single_question_range})'),
+        ('min', f'=min({single_question_range})'),
+    ]
+
+    def produce_column_agregation_lines(name, formula):
+        return [*['' for _ in range(first_data_column)], *[formula.format(col_letter=COLUMN_NAMES[first_data_column+i]) for i in range(args.nb_questions)], '', '', '', '']
+
+    for name, formula in aggregation_formulas:
+        agg_line = produce_column_agregation_lines(name, formula)
+        sys.stdout.write(format_line(agg_line))
 
 
 if __name__ == '__main__':
