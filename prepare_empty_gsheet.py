@@ -6,6 +6,8 @@ import logging
 import string
 import sys
 
+import fold_to_ascii
+
 from cookie_magic import get_session
 
 import class_session
@@ -19,6 +21,32 @@ def format_line(items):
     return '\t'.join(items) + '\n'
 
 
+def normalize_name(name):
+    return fold_to_ascii.fold(name.lower())
+
+
+class NameNotResolvedError(Exception):
+    pass
+
+
+def get_termin_id_by_name(termins, name):
+    matches = [normalize_name(name) == normalize_name(t['termin_nazev']) for t in termins]
+    match_idxs = [i for i in range(len(matches)) if matches[i]]
+
+    if len(match_idxs) == 1:
+        return termins[match_idxs[0]]['termin_id']
+    elif len(match_idxs) == 0:
+        logging.error(f'Found no match for termin named "{name}"')
+        logging.error(f'Possibilites: {[t["termin_nazev"] for t in termins]}')
+        raise NameNotResolvedError()
+    elif len(match_idxs) > 1:
+        logging.error(f'Found multiple matches for termin named "{name}: {[termins[m]["termin_nazev"] for m in match_idxs]}"')
+        logging.error(f'Possibilites: {[t["termin_nazev"] for t in termins]}')
+        raise NameNotResolvedError()
+    else:
+        assert False, 'Absolutely impossible number of matches for {name}: {len(match_idxs)}'
+
+
 COLUMN_NAMES = string.ascii_uppercase
 
 
@@ -27,7 +55,7 @@ def main():
     parser.add_argument('--cookie', default=f'{os.path.expanduser("~")}/.vut_cookie')
     parser.add_argument('-p', '--predmet-zkratka', required=True)
     parser.add_argument('-y', '--predmet-year', type=int)
-    parser.add_argument('-t', '--termin-id', type=int, required=True)
+    parser.add_argument('-t', '--termin-name', required=True)
     parser.add_argument('-q', '--nb-questions', type=int, required=True)
     args = parser.parse_args()
 
@@ -37,10 +65,14 @@ def main():
     aktualni_predmet_id = class_session.get_aktualni_predmet_id(session, args.predmet_zkratka, args.predmet_year)
     predmet_session = class_session.ClassSession(session, aktualni_predmet_id)
 
-    terminy_ids = predmet_session.get_termins()
+    termins = predmet_session.get_termins()
+    try:
+        termin_id = get_termin_id_by_name(termins, args.termin_name)
+    except NameNotResolvedError:
+        return 1
 
     students_all = index_collection(predmet_session.get_students(), 'student_id')
-    students_termin = predmet_session.get_termin_students(args.termin_id)
+    students_termin = predmet_session.get_termin_students(termin_id)
 
     header = ['login', 'variant', *[str(i+1) for i in range(args.nb_questions)], 'login', 'name', 'sum', 'norm']
     nb_columns = len(header)
