@@ -59,7 +59,7 @@ class ClassSession:
 
         return body
 
-    def set_termin_points(self, termin_id, el_index_id, points, date):
+    def set_termin_points(self, termin_id, el_index_id, points, date, custom_message=None):
         termin_root_id, zt_id = find_root_termin_id(self.full_termins_cached, termin_id)
 
         prihlaseni_query = f'https://api.vut.cz/api/fit/aktualni_predmet/{self.predmet_id}/termin/{termin_id}/zkouska_termin/{zt_id}/el_index/{el_index_id}/v4'
@@ -68,7 +68,7 @@ class ClassSession:
             raise ValueError(f'Failed to register student {el_index_id} for termin {termin_id}: {r.json()}')
 
         hodnoceni_url = f'https://api.vut.cz/api/fit/aktualni_predmet/{self.predmet_id}/termin/{termin_id}/zkouska_termin/{zt_id}/el_index/{el_index_id}/v3'
-        payload = {"POCET_BODU": points, "DATUM": date}
+        payload = {"POCET_BODU": points, "DATUM": date, "ZPRAVA_STUDENTOVI": custom_message}
         r = self.session.patch(hodnoceni_url, json=payload)
 
         if r.status_code != 200:
