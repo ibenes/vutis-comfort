@@ -28,10 +28,23 @@ def get_aktualni_predmet_id(session, abbreviation, academic_year):
     return desired_aktualni_predmet_id
 
 
+def find_root_termin_id(termins, termin_id):
+    for t in termins:
+        for instance in t['terminy']:
+            if instance['termin_id'] == termin_id:
+                # print(t)
+                # print(instance)
+                return t['zkouska_projekt_id'], instance['zkouska_termin_id']
+
+    raise ValueError(f"Couldn't find root for termin {termin_id}")
+
+
 class ClassSession:
     def __init__(self, butis_session, predmet_id):
         self.session = butis_session
         self.predmet_id = predmet_id
+
+        self.full_termins_cached = None
 
     def get_termin_points(self, termin_id, el_index_id):
         hodnoceni_query_template = 'https://api.vut.cz/api/fit/aktualni_predmet/{}/termin/{}/el_index/{}/v3'
@@ -46,12 +59,27 @@ class ClassSession:
 
         return body
 
+    def set_termin_points(self, termin_id, el_index_id, points, date):
+        termin_root_id, zt_id = find_root_termin_id(self.full_termins_cached, termin_id)
+
+        prihlaseni_query = f'https://api.vut.cz/api/fit/aktualni_predmet/{self.predmet_id}/termin/{termin_id}/zkouska_termin/{zt_id}/el_index/{el_index_id}/v4'
+        r = self.session.post(prihlaseni_query)
+        if r.status_code != 200:
+            raise ValueError(f'Failed to register student {el_index_id} for termin {termin_id}: {r.json()}')
+
+        hodnoceni_url = f'https://api.vut.cz/api/fit/aktualni_predmet/{self.predmet_id}/termin/{termin_id}/zkouska_termin/{zt_id}/el_index/{el_index_id}/v3'
+        payload = {"POCET_BODU": points, "DATUM": date}
+        r = self.session.patch(hodnoceni_url, json=payload)
+
+        if r.status_code != 200:
+            raise ValueError(f'Failed to assign {points} points to student {el_index_id} for termin {termin_id} on {date}')
+
     def get_termin_students(self, termin_id, key='per_id'):
         query = f'https://api.vut.cz/api/fit/aktualni_predmet/{self.predmet_id}/termin/{termin_id}/studenti/v3'
         r = self.session.get(query)
 
         students = r.json()['data']['studenti']
-        return [s[key] for s in students]
+        return {s[key]: s for s in students}
 
     def get_termins(self):
         terminy_query = f'https://api.vut.cz/api/fit/aktualni_predmet/{self.predmet_id}/terminy/v3'
@@ -59,13 +87,15 @@ class ClassSession:
         this_class = r.json()['data']['predmety'][0]['aktualni_predmety'][0]
         assert this_class['aktualni_predmet_id'] == self.predmet_id
 
-        terminy_ids = []
+        self.full_termins_cached = this_class['zkousky']  # TODO just download this once for whole class
+
+        terminy = []
         for classification_item in this_class['zkousky']:
             for instance in classification_item['terminy']:
-                terminy_ids.append(instance['termin_id'])
+                terminy.append(instance)
                 logging.info(f"{classification_item['zkouska_projekt_nazev']}, {instance['termin_nazev']}, instance['zacatek_zkousky'], {instance['termin_id']}")
 
-        return terminy_ids
+        return terminy
 
     def get_zadani_points(self, zadani_id, el_index_id):
         query = f'https://api.vut.cz/api/fit/aktualni_predmet/{self.predmet_id}/zadani/{zadani_id}/el_index/{el_index_id}/v4'
